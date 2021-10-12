@@ -126,7 +126,7 @@ cb_list.append(cp_callback)
 history = model.fit_generator(
     train_generator,
     validation_data=validation_generator,
-    steps_per_epoch=10,
+    # steps_per_epoch=10,
     epochs=epochs,
     verbose=1,
     workers=8,
@@ -139,8 +139,7 @@ history = model.fit_generator(
 ###テスト###
 print("テスト中")
 loss_and_metrics = model.evaluate_generator(
-    test_generator,
-    steps=100
+    test_generator
 )
 print("Test loss:",loss_and_metrics[0])
 print("Test accuracy:",loss_and_metrics[1])
@@ -151,7 +150,6 @@ print("Test TP:",loss_and_metrics[5])
 print("Test TN:",loss_and_metrics[6])
 print("Test FP:",loss_and_metrics[7])
 print("Test FN:",loss_and_metrics[8])
-
 
 
 ###モデルの保存###

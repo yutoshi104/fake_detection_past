@@ -88,7 +88,7 @@ def loadSampleCnn(input_shape=(480,640,3),gpu_count=2):
 
 
 ### CNN VGG16 ###
-def loadVgg16(input_shape=(480,640,3)):
+def loadVgg16(input_shape=(480,640,3),gpu_count=2):
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
         # input_tensor = models.Input(shape=input_shape)
@@ -141,7 +141,7 @@ def loadVgg16(input_shape=(480,640,3)):
 
 
 ### CNN Xception ###
-def loadXception(input_shape):
+def loadXception(input_shape=(480,640,3),gpu_count=2):
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
         model = models.Sequential(name="Xception")
@@ -157,7 +157,7 @@ def loadXception(input_shape):
     return model
 
 ### CNN EfficientNetV2 ###
-def loadEfficientNetV2():
+def loadEfficientNetV2(input_shape=(480,640,3),gpu_count=2):
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
         pass
@@ -165,7 +165,7 @@ def loadEfficientNetV2():
 
 
 ### CNN AutoEncoder ###
-def loadAutoEncoder(input_shape=(480,640,3)):
+def loadAutoEncoder(input_shape=(480,640,3),gpu_count=2):
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
         input_img = models.Input(shape=input_shape)
@@ -213,8 +213,30 @@ def loadAutoEncoder(input_shape=(480,640,3)):
         model = models.Model(inputs=input_img, outputs=y)
         model.compile(
             loss='mean_squared_error',
-            optimizer='adam',
+            optimizer=optimizers.Adam(lr=1e-4),
+            metrics=[metrics.Accuracy()]
+        )
+    return model
+
+
+
+### RNN ###
+def loadRnn(input_shape=(5,256,256,3),gpu_count=2):
+    strategy = tf.distribute.MirroredStrategy()
+    with strategy.scope():
+        inputs = layers.Input(shape=input_shape)
+        x0 = layers.ConvLSTM2D(filters=16, kernel_size=(3,3), padding="same", return_sequences=True, data_format="channels_last")(inputs)
+        x0 = layers.BatchNormalization(momentum=0.6)(x0)
+        x0 = layers.ConvLSTM2D(filters=16, kernel_size=(3,3), padding="same", return_sequences=True, data_format="channels_last")(x0)
+        x0 = layers.BatchNormalization(momentum=0.8)(x0)
+        x0 = layers.ConvLSTM2D(filters=3, kernel_size=(3,3), padding="same", return_sequences=False, data_format="channels_last")(x0)
+        output = layers.Activation('tanh')(x0)
+        model = models.Model(inputs=inputs, outputs=output)
+        model.compile(
+            loss='binary_crossentropy',
+            optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
             metrics=[metrics.Accuracy(), metrics.AUC(), metrics.Precision(), metrics.Recall() , metrics.TruePositives(), metrics.TrueNegatives(), metrics.FalsePositives(), metrics.FalseNegatives()]
         )
     return model
+
 
