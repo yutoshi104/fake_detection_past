@@ -1,3 +1,7 @@
+# GPU無効化
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = '-1'
+
 from tensorflow.python.keras import layers
 from tensorflow.python.keras import models
 from tensorflow.python.keras import applications
@@ -22,6 +26,8 @@ import time
 import os
 from itertools import islice
 
+from defined_models import efficientnetv2
+
 
 
 ### GPU稼働確認 ###
@@ -29,7 +35,7 @@ import tensorflow as tf
 from tensorflow.python.client import device_lib
 print(tf.__version__)
 print(device_lib.list_local_devices())
-
+    
 
 ### ROC AUC ###
 # def auc(y_true, y_pred):
@@ -160,8 +166,21 @@ def loadXception(input_shape=(480,640,3),gpu_count=2):
 def loadEfficientNetV2(input_shape=(480,640,3),gpu_count=2):
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
-        pass
-    return None
+        model = models.Sequential(
+            [
+                layers.InputLayer(input_shape=input_shape),
+                efficientnetv2.effnetv2_model.get_model('efficientnetv2-b0', include_top=False),
+                layers.Dropout(rate=0.2),
+                layers.Dense(1, activation='softmax'),
+            ],
+            name="EfficientNetV2"
+        )
+        model.compile(
+            loss='binary_crossentropy',
+            optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
+            metrics=[metrics.Accuracy(), metrics.AUC(), metrics.Precision(), metrics.Recall() , metrics.TruePositives(), metrics.TrueNegatives(), metrics.FalsePositives(), metrics.FalseNegatives()]
+        )
+    return model
 
 
 ### CNN AutoEncoder ###
@@ -221,7 +240,7 @@ def loadAutoEncoder(input_shape=(480,640,3),gpu_count=2):
 
 
 ### RNN ###
-def loadRnn(input_shape=(5,256,256,3),gpu_count=2):
+def loadSampleRnn(input_shape=(5,256,256,3),gpu_count=2):
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
         inputs = layers.Input(shape=input_shape)

@@ -1,10 +1,19 @@
+# GPU無効化
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = '-1'
+
+import tensorflow as tf
+from tensorflow.python.client import device_lib
+tf.get_logger().setLevel("ERROR")
 from mtcnn.mtcnn import MTCNN
+print(tf.__version__)
+print(device_lib.list_local_devices())
 import cv2
 import os
 import glob
-from pprint import pprint
 
 
+detector = MTCNN()
 
 def image2face(src_path, dst_directory, square_size=None, padding_rate=0, confidence_threshold=0.9, biggest_confidence=True, ext='jpg'):
 
@@ -14,8 +23,12 @@ def image2face(src_path, dst_directory, square_size=None, padding_rate=0, confid
     pixels = cv2.cvtColor(src_data, cv2.COLOR_BGR2RGB)
 
     # 顔抽出
-    detector = MTCNN()
+    # try:
     faces = detector.detect_faces(pixels)
+    # except:
+    #     with open("error.log",mode="w") as f:
+    #         f.write(src_path+"\n")
+    #     return
 
     # パス作成
     os.makedirs(dst_directory, exist_ok=True)
@@ -27,6 +40,7 @@ def image2face(src_path, dst_directory, square_size=None, padding_rate=0, confid
         # 閾値よりも低い信頼度であればスキップ
         confidence = faces[i]['confidence']
         if confidence < confidence_threshold:
+            print(f"skip:「{src_path}-{i}」(confidence:{confidence})")
             continue
 
         x1, y1, width, height = faces[i]['box']
@@ -54,7 +68,7 @@ def image2face(src_path, dst_directory, square_size=None, padding_rate=0, confid
                     x1 = 0
                 if w < width:
                     width = w
-                    height = w
+                    height = w  
 
         # パディング(上下左右それぞれに、padding_rate分の、上下左右で平等なパディングを施す)
         if padding_rate:
@@ -67,6 +81,8 @@ def image2face(src_path, dst_directory, square_size=None, padding_rate=0, confid
                 min_p = y1
             if y1+height+min_p > h and h-(y1+height) < min_p:
                 min_p = h-(y1+height)
+            if min_p < 0:
+                min_p = 0
             x1 -= min_p
             y1 -= min_p
             width += min_p*2
@@ -80,8 +96,9 @@ def image2face(src_path, dst_directory, square_size=None, padding_rate=0, confid
             croped_data = cv2.resize(croped_data, dsize=(square_size,square_size))
 
         if biggest_confidence:
-            max_confidence = confidence
-            md = croped_data
+            if max_confidence < confidence:
+                max_confidence = confidence
+                md = croped_data
         else:
             cv2.imwrite(dst_path, croped_data)
 
@@ -95,11 +112,11 @@ def image2face(src_path, dst_directory, square_size=None, padding_rate=0, confid
 
 if __name__=='__main__':
     ###パラメータ###
-    # src_directory = "../data/Celeb-real-image"
-    # dst_directory = "../data/Celeb-real-image-face"
-    src_directory = "../data/Celeb-synthesis-image-learning"
-    dst_directory = "../data/Celeb-synthesis-image-learning-face"
-    square_size = 512
+    src_directory = "/data/toshikawa/datas/Celeb-real-image"
+    dst_directory = "/data/toshikawa/datas/Celeb-real-image-face"
+    # src_directory = "/data/toshikawa/datas/Celeb-synthesis-image-learning-2"
+    # dst_directory = "/data/toshikawa/datas/Celeb-synthesis-image-learning-2-face"
+    square_size = 256
     padding_rate = 0.1
     confidence_threshold = 0.9
     
@@ -113,3 +130,5 @@ if __name__=='__main__':
             padding_rate=padding_rate,
             confidence_threshold=confidence_threshold
         )
+
+    

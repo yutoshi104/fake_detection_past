@@ -17,7 +17,7 @@ def save_all_frames(video_path, dir_path, basename, step=1, ext='jpg'):
     while True:
         ret, frame = cap.read()
         if ret:
-            if (n%step)==1:
+            if (n%step)==0:
                 cv2.imwrite('{}_{}.{}'.format(base_path, str(n).zfill(digit), ext), frame)
             n += 1
         else:
@@ -26,10 +26,15 @@ def save_all_frames(video_path, dir_path, basename, step=1, ext='jpg'):
 
 
 if __name__=='__main__':
-    video_directory = "../../Celeb-DF-v2/Celeb-synthesis/*"
-    # image_directory = "../data/Celeb-synthesis-image-learning"
-    image_directory = "../data/Celeb-synthesis-image-sub"
-    step = 10    #何フレームごとに画像を保存するか
+    video_directory = "/data/toshikawa/Celeb-DF-v2/Celeb-synthesis/*"
+    image_directory = "/data/toshikawa/datas/Celeb-synthesis-image"
+    # video_directory = "/data/toshikawa/Celeb-DF-v2/Celeb-real/*"
+    # image_directory = "/data/toshikawa/datas/Celeb-real-image"
+    # video_directory = "/data/toshikawa/DFMNIST+/fake_dataset/*/*.mp4"
+    # image_directory = "/data/toshikawa/datas/DFMNIST-fake-image"
+    # video_directory = "/data/toshikawa/DFMNIST+/real_dataset/*/*.mp4"
+    # image_directory = "/data/toshikawa/datas/DFMNIST-real-image"
+    step = 1    #何フレームごとに画像を保存するか
 
     videos = glob.glob(video_directory)
     for video in videos:

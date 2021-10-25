@@ -15,19 +15,19 @@ from common_import import *
 
 
 ###パラメータ###
-model_structure = "SampleCnn"
-epochs = 2
+model_structure = "EfficientNetV2"
+epochs = 150
 gpu_count = 2
 batch_size = 32 * gpu_count
 validation_rate = 0.1
 test_rate = 0.1
-cp_period = 1
-data_dir = '../data'
+cp_period = 10
+data_dir = '/data/toshikawa/datas'
 # classes = ['yuto', 'b']
-classes = ['Celeb-real-image', 'Celeb-synthesis-image-learning']
-# classes = ['Celeb-real-image-face', 'Celeb-synthesis-image-learning-face']
-image_size = (480, 640, 3)
-# image_size = (512, 512, 3)
+# classes = ['Celeb-real-image', 'Celeb-synthesis-image-learning-2']
+classes = ['Celeb-real-image-face', 'Celeb-synthesis-image-learning-2-face']
+# image_size = (480, 640, 3)
+image_size = (256, 256, 3)
 es_flg = False
 
 
@@ -41,6 +41,16 @@ horizontal_flip=True#False
 vertical_flip=False#False
 
 
+###不均衡データ調整###
+class_file_num = {}
+class_weights = {}
+for i,c in enumerate(classes):
+    class_file_num[c] = sum(os.path.isfile(os.path.join(data_dir+"/"+c,name)) for name in os.listdir(data_dir+"/"+c))
+    if i==0:
+        n = class_file_num[c]
+    class_weights[i] = 1 / (class_file_num[c]/n)
+print(class_file_num)
+
 
 ###ディレクトリ作成###
 t = time.strftime("%Y%m%d-%H%M%S")
@@ -50,11 +60,9 @@ cp_dir = f'../model/{model_structure}_{t}_epoch{epochs}/checkpoint'
 os.makedirs(cp_dir, exist_ok=True)
 
 
-
 ###モデルの生成###
 model = globals()['load'+model_structure](input_shape=image_size,gpu_count=gpu_count)
 model.summary()
-
 
 
 ###Generator作成###
@@ -121,19 +129,18 @@ cp_callback = callbacks.ModelCheckpoint(
 cb_list.append(cp_callback)
 
 
-
 ###学習###
 history = model.fit_generator(
     train_generator,
     validation_data=validation_generator,
     # steps_per_epoch=10,
     epochs=epochs,
+    class_weight=class_weights,
     verbose=1,
     workers=8,
     use_multiprocessing=False,
     callbacks=cb_list
 )
-
 
 
 ###テスト###
@@ -156,7 +163,6 @@ print("Test FN:",loss_and_metrics[8])
 print("Save model...")
 model.save(f'{model_dir}/model.h5')
 model.save_weights(f'{model_dir}/weight.hdf5')
-
 
 
 ###グラフ化###
