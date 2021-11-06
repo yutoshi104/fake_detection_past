@@ -121,6 +121,25 @@ cp_callback = callbacks.ModelCheckpoint(
 cb_list.append(cp_callback)
 
 
+###条件出力###
+print("\tGPU COUNT: " + gpu_count)
+print("\tBATCH SIZE: " + batch_size)
+print("\tVALIDATION RATE: " + validation_rate)
+print("\tTEST RATE: " + test_rate)
+print("\tCHECKPOINT PERIOD: " + cp_period)
+print("\tDATA DIRECTORY: " + data_dir)
+print("\tCLASSES: " + classes)
+print("\tIMAGE SIZE: " + image_size)
+print("\tEARLY STOPPING: " + es_flg)
+print("\tROTATION RANGE: " + rotation_range)
+print("\tWIDTH SHIFT RANGE: " + width_shift_range)
+print("\tHEIGHT SHIFT RANGE: " + height_shift_range)
+print("\tSHEAR RANGE: " + shear_range)
+print("\tZOOM RANGE: " + zoom_range)
+print("\tHORIZONTAL FLIP: " + horizontal_flip)
+print("\tVERTICAL FLIP: " + vertical_flip)
+print("")
+
 
 ###学習###
 history = model.fit_generator(

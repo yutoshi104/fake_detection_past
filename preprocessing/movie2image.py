@@ -36,7 +36,7 @@ if __name__=='__main__':
     # image_directory = "/data/toshikawa/datas/DFMNIST-real-image"
     step = 1    #何フレームごとに画像を保存するか
 
-    videos = glob.glob(video_directory)
+    videos = sorted(glob.glob(video_directory))
     for video in videos:
         basename = os.path.splitext(os.path.basename(video))[0]
         print(basename)

@@ -112,15 +112,15 @@ def image2face(src_path, dst_directory, square_size=None, padding_rate=0, confid
 
 if __name__=='__main__':
     ###パラメータ###
-    src_directory = "/data/toshikawa/datas/Celeb-real-image"
-    dst_directory = "/data/toshikawa/datas/Celeb-real-image-face"
-    # src_directory = "/data/toshikawa/datas/Celeb-synthesis-image-learning-2"
-    # dst_directory = "/data/toshikawa/datas/Celeb-synthesis-image-learning-2-face"
+    # src_directory = "/data/toshikawa/datas/Celeb-real-image"
+    # dst_directory = "/data/toshikawa/datas/Celeb-real-image-face"
+    src_directory = "/data/toshikawa/datas/Celeb-synthesis-image"
+    dst_directory = "/data/toshikawa/datas/Celeb-synthesis-image-face"
     square_size = 256
     padding_rate = 0.1
     confidence_threshold = 0.9
     
-    images = glob.glob(src_directory+"/*")
+    images = sorted(glob.glob(src_directory+"/*"))
     for image in images:
         print(image)
         image2face(

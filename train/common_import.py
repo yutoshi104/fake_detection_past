@@ -8,6 +8,7 @@ from tensorflow.python.keras import applications
 from tensorflow.keras import optimizers
 from tensorflow.python.keras import callbacks
 from tensorflow.python.keras import metrics
+from tensorflow.python.keras.datasets import cifar10
 from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
 import tensorflow as tf
 from tensorflow.python.keras.utils.multi_gpu_utils import multi_gpu_model
@@ -18,13 +19,17 @@ import tensorflow.python.keras.backend as K
 import matplotlib.pyplot as plt
 #import cv2
 import numpy as np
+import signal
 from pathlib import Path
+import glob
 import cv2
 import pickle
 import re
 import time
 import os
+import random
 from itertools import islice
+from pprint import pprint
 
 from defined_models import efficientnetv2
 
@@ -52,6 +57,59 @@ print(device_lib.list_local_devices())
 #     return fpr, tpr, thresholds
 
 
+###サンプルデータ取得###
+def getSampleData():
+    # CIFAR10データの読み込み
+    (X_train, y_train), (X_test, y_test), = cifar10.load_data()
+    y_train = y_train.reshape(-1)
+    y_test = y_test.reshape(-1)
+
+    # 0番目のクラスと1番目のクラスのデータを結合
+    X_train = np.concatenate([X_train[y_train == 0], X_train[y_train == 1]], axis=0)
+    y_train = np.concatenate([y_train[y_train == 0], y_train[y_train == 1]], axis=0)
+    X_test = np.concatenate([X_test[y_test == 0], X_test[y_test == 1]], axis=0)
+    y_test = np.concatenate([y_test[y_test == 0], y_test[y_test == 1]], axis=0)
+
+    # Generator生成
+    train_datagen = ImageDataGenerator(
+        rescale=1. / 255,
+        rotation_range=90,
+        width_shift_range=0.2,
+        height_shift_range=0.2,
+        horizontal_flip=True
+    )
+    test_datagen = ImageDataGenerator(
+        rescale=1. / 255
+    )
+    train_generator = train_datagen.flow(X_train, y_train, batch_size=32)
+    test_generator = test_datagen.flow(X_test, y_test, batch_size=32)
+
+    return (train_generator,test_generator)
+
+
+###評価関数取得###
+def getMetrics(mode=None):
+    mode = "all"
+    metrics_list = []
+    metrics_list.append('accuracy')
+    # metrics_list.append(metrics.Accuracy())
+    if mode!="accuracy":
+        metrics_list.append(metrics.AUC())
+    if mode=="all":
+        metrics_list.append(metrics.Precision())
+        metrics_list.append(metrics.Recall())
+    if mode!="accuracy":
+        metrics_list.append(metrics.TruePositives())
+        metrics_list.append(metrics.TrueNegatives())
+        metrics_list.append(metrics.FalsePositives())
+        metrics_list.append(metrics.FalseNegatives())
+    return metrics_list
+
+
+
+
+
+
 
 
 ### CNN 2値分類 ###
@@ -75,9 +133,9 @@ def loadSampleCnn(input_shape=(480,640,3),gpu_count=2):
         model.add(layers.Conv2D(256, (3, 3), activation='relu'))
         model.add(layers.Conv2D(256, (3, 3), activation='relu'))
         model.add(layers.MaxPooling2D((2, 2)))
-        model.add(layers.Conv2D(512, (3, 3), activation='relu'))
-        model.add(layers.Conv2D(512, (3, 3), activation='relu'))
-        model.add(layers.MaxPooling2D((2, 2)))
+        # model.add(layers.Conv2D(512, (3, 3), activation='relu'))
+        # model.add(layers.Conv2D(512, (3, 3), activation='relu'))
+        # model.add(layers.MaxPooling2D((2, 2)))
 
         model.add(layers.Flatten())
         model.add(layers.Dense(512, activation='relu'))
@@ -88,7 +146,7 @@ def loadSampleCnn(input_shape=(480,640,3),gpu_count=2):
         model.compile(
             loss='binary_crossentropy',
             optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
-            metrics=[metrics.Accuracy(), metrics.AUC(), metrics.Precision(), metrics.Recall() , metrics.TruePositives(), metrics.TrueNegatives(), metrics.FalsePositives(), metrics.FalseNegatives()]
+            metrics=getMetrics()
         )
     return model
 
@@ -111,29 +169,30 @@ def loadVgg16(input_shape=(480,640,3),gpu_count=2):
         model = models.Sequential(name="VGG16")
         model.add(layers.Conv2D(input_shape=input_shape,filters=64,kernel_size=(3,3),padding="same", activation="relu"))
         model.add(layers.Conv2D(filters=64,kernel_size=(3,3),padding="same", activation="relu"))
-        model.add(layers.MaxPool2D(pool_size=(2,2),strides=(2,2)))
+        model.add(layers.MaxPooling2D(pool_size=(2,2),strides=(2,2)))
         model.add(layers.Conv2D(filters=128, kernel_size=(3,3), padding="same", activation="relu"))
         model.add(layers.Conv2D(filters=128, kernel_size=(3,3), padding="same", activation="relu"))
-        model.add(layers.MaxPool2D(pool_size=(2,2),strides=(2,2)))
+        model.add(layers.MaxPooling2D(pool_size=(2,2),strides=(2,2)))
         model.add(layers.Conv2D(filters=256, kernel_size=(3,3), padding="same", activation="relu"))
         model.add(layers.Conv2D(filters=256, kernel_size=(3,3), padding="same", activation="relu"))
         model.add(layers.Conv2D(filters=256, kernel_size=(3,3), padding="same", activation="relu"))
-        model.add(layers.MaxPool2D(pool_size=(2,2),strides=(2,2)))
+        model.add(layers.MaxPooling2D(pool_size=(2,2),strides=(2,2)))
         model.add(layers.Conv2D(filters=512, kernel_size=(3,3), padding="same", activation="relu"))
         model.add(layers.Conv2D(filters=512, kernel_size=(3,3), padding="same", activation="relu"))
         model.add(layers.Conv2D(filters=512, kernel_size=(3,3), padding="same", activation="relu"))
-        model.add(layers.MaxPool2D(pool_size=(2,2),strides=(2,2)))
+        model.add(layers.MaxPooling2D(pool_size=(2,2),strides=(2,2)))
         model.add(layers.Conv2D(filters=512, kernel_size=(3,3), padding="same", activation="relu"))
         model.add(layers.Conv2D(filters=512, kernel_size=(3,3), padding="same", activation="relu"))
         model.add(layers.Conv2D(filters=512, kernel_size=(3,3), padding="same", activation="relu"))
-        model.add(layers.MaxPool2D(pool_size=(2,2),strides=(2,2)))
+        model.add(layers.MaxPooling2D(pool_size=(2,2),strides=(2,2)))
         model.add(layers.Flatten())
         model.add(layers.Dense(units=4096,activation="relu"))
         model.add(layers.Dense(units=4096,activation="relu"))
-        model.add(layers.Dense(units=1, activation="softmax"))
+        model.add(layers.Dense(units=1, activation="sigmoid"))
 
         # model = models.Sequential(name="VGG16")
         # model.add(applications.vgg16.VGG16(include_top=False, weights=None, input_shape=input_shape))
+        # model.add(layers.Flatten())
         # model.add(layers.Dense(256, activation='relu'))
         # model.add(layers.Dropout(0.5))
         # model.add(layers.Dense(1, activation='softmax'))
@@ -141,7 +200,7 @@ def loadVgg16(input_shape=(480,640,3),gpu_count=2):
         model.compile(
             loss='binary_crossentropy',
             optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
-            metrics=[metrics.Accuracy(), metrics.AUC(), metrics.Precision(), metrics.Recall() , metrics.TruePositives(), metrics.TrueNegatives(), metrics.FalsePositives(), metrics.FalseNegatives()]
+            metrics=getMetrics("all")
         )
     return model
 
@@ -152,13 +211,14 @@ def loadXception(input_shape=(480,640,3),gpu_count=2):
     with strategy.scope():
         model = models.Sequential(name="Xception")
         model.add(applications.xception.Xception(include_top=False, weights=None, input_shape=input_shape))
+        model.add(layers.Flatten())
         model.add(layers.Dense(256, activation='relu'))
         model.add(layers.Dropout(0.5))
-        model.add(layers.Dense(1, activation='softmax'))
+        model.add(layers.Dense(1, activation='sigmoid'))
         model.compile(
             loss='binary_crossentropy',
             optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
-            metrics=[metrics.Accuracy(), metrics.AUC(), metrics.Precision(), metrics.Recall() , metrics.TruePositives(), metrics.TrueNegatives(), metrics.FalsePositives(), metrics.FalseNegatives()]
+            metrics=getMetrics("all")
         )
     return model
 
@@ -166,19 +226,15 @@ def loadXception(input_shape=(480,640,3),gpu_count=2):
 def loadEfficientNetV2(input_shape=(480,640,3),gpu_count=2):
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
-        model = models.Sequential(
-            [
-                layers.InputLayer(input_shape=input_shape),
-                efficientnetv2.effnetv2_model.get_model('efficientnetv2-b0', include_top=False),
-                layers.Dropout(rate=0.2),
-                layers.Dense(1, activation='softmax'),
-            ],
-            name="EfficientNetV2"
-        )
+        model = models.Sequential(name="EfficientNetV2")
+        model.add(layers.InputLayer(input_shape=input_shape))
+        model.add(efficientnetv2.effnetv2_model.get_model('efficientnetv2-b0', include_top=False))
+        model.add(layers.Dropout(rate=0.2))
+        model.add(layers.Dense(1, activation='sigmoid'))
         model.compile(
             loss='binary_crossentropy',
             optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
-            metrics=[metrics.Accuracy(), metrics.AUC(), metrics.Precision(), metrics.Recall() , metrics.TruePositives(), metrics.TrueNegatives(), metrics.FalsePositives(), metrics.FalseNegatives()]
+            metrics=getMetrics("all")
         )
     return model
 
