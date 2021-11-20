@@ -28,10 +28,13 @@ import re
 import time
 import os
 import random
+from random import shuffle
 from itertools import islice
 from pprint import pprint
 
 from defined_models import efficientnetv2
+from ImageIterator import *
+from ImageSequenceIterator import *
 
 
 
@@ -305,7 +308,13 @@ def loadSampleRnn(input_shape=(5,256,256,3),gpu_count=2):
         x0 = layers.ConvLSTM2D(filters=16, kernel_size=(3,3), padding="same", return_sequences=True, data_format="channels_last")(x0)
         x0 = layers.BatchNormalization(momentum=0.8)(x0)
         x0 = layers.ConvLSTM2D(filters=3, kernel_size=(3,3), padding="same", return_sequences=False, data_format="channels_last")(x0)
-        output = layers.Activation('tanh')(x0)
+        x0 = layers.Flatten()(x0)
+        # x0 = layers.Dense(4096, activation='relu')(x0)
+        # x0 = layers.Dense(2048, activation='relu')(x0)
+        x0 = layers.Dense(512, activation='relu')(x0)
+        x0 = layers.Dense(128, activation='relu')(x0)
+        output = layers.Dense(1, activation='relu')(x0)
+        # output = layers.Activation('tanh')(x0)
         model = models.Model(inputs=inputs, outputs=output)
         model.compile(
             loss='binary_crossentropy',
