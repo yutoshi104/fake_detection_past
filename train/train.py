@@ -17,19 +17,22 @@ from common_import import *
 ###パラメータ###
 # model_structure = "SampleCnn"
 # model_structure = "Vgg16"
+# model_structure = "Inception"
 # model_structure = "Xception"
-model_structure = "EfficientNetV2"
+# model_structure = "EfficientNetV2"
+model_structure = "OriginalNet"
 epochs = 50
 gpu_count = 2
-batch_size = 32 * gpu_count
+batch_size = 64 * gpu_count
 validation_rate = 0.1
 test_rate = 0.1
 cp_period = 10
 data_dir = '/data/toshikawa/datas'
 # classes = ['yuto', 'b']
-# classes = ['Celeb-real-image', 'Celeb-synthesis-image-learning-2']
+# classes = ['Celeb-real-image', 'Celeb-synthesis-image']
 classes = ['Celeb-real-image-face', 'Celeb-synthesis-image-face']
 # image_size = (480, 640, 3)
+# image_size = (240, 320, 3)
 image_size = (256, 256, 3)
 # image_size = (32, 32, 3)
 es_flg = False

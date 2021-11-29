@@ -18,7 +18,7 @@ from common_import import *
 model_structure = "SampleRnn"
 epochs = 50
 gpu_count = 2
-batch_size = 16 * gpu_count
+batch_size = 8 * gpu_count
 validation_rate = 0.1
 test_rate = 0.1
 cp_period = 10

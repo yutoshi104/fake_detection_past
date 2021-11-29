@@ -1,7 +1,8 @@
 # GPU無効化
-# import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = '-1'
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = '-1'
 
+import tensorflow.python.keras as keras
 from tensorflow.python.keras import layers
 from tensorflow.python.keras import models
 from tensorflow.python.keras import applications
@@ -32,7 +33,10 @@ from random import shuffle
 from itertools import islice
 from pprint import pprint
 
+from tensorflow.python.util.nest import _yield_value
+
 from defined_models import efficientnetv2
+from originalnet import *
 from ImageIterator import *
 from ImageSequenceIterator import *
 
@@ -207,6 +211,22 @@ def loadVgg16(input_shape=(480,640,3),gpu_count=2):
         )
     return model
 
+### CNN Inception ###
+def loadInception(input_shape=(480,640,3),gpu_count=2):
+    strategy = tf.distribute.MirroredStrategy()
+    with strategy.scope():
+        model = models.Sequential(name="Xception")
+        model.add(applications.inception_v3.InceptionV3(include_top=False, weights=None, input_shape=input_shape))
+        model.add(layers.Flatten())
+        model.add(layers.Dense(256, activation='relu'))
+        model.add(layers.Dropout(0.5))
+        model.add(layers.Dense(1, activation='sigmoid'))
+        model.compile(
+            loss='binary_crossentropy',
+            optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
+            metrics=getMetrics("all")
+        )
+    return model
 
 ### CNN Xception ###
 def loadXception(input_shape=(480,640,3),gpu_count=2):
@@ -225,13 +245,100 @@ def loadXception(input_shape=(480,640,3),gpu_count=2):
         )
     return model
 
+### CNN Xception (素) ###
+def loadXceptionOriginal(input_shape=(480,640,3),gpu_count=2):
+    strategy = tf.distribute.MirroredStrategy()
+    with strategy.scope():
+        inputs = keras.Input(shape=input_shape)
+
+        # entry flow
+        x = layers.Convolution2D(32, (3,3), strides=2)(inputs)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = layers.Convolution2D(64, (3,3))(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        residual = layers.Convolution2D(128, (1,1), strides=2, padding='same')(x)
+        residual = layers.BatchNormalization()(residual)
+        x = layers.SeparableConv2D(128, (3,3), padding='same')(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = layers.SeparableConv2D(128, (3,3), padding='same')(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.MaxPooling2D((3, 3), strides=2, padding='same')(x)
+        x = layers.add([x, residual])
+        residual = layers.Convolution2D(256, (1,1), strides=2, padding='same')(x)
+        residual = layers.BatchNormalization()(residual)
+        x = layers.Activation('relu')(x)
+        x = layers.SeparableConv2D(256, (3,3), padding='same')(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = layers.SeparableConv2D(256, (3,3), padding='same')(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.MaxPooling2D((3, 3), strides=2, padding='same')(x)
+        x = layers.add([x, residual])
+        residual = layers.Convolution2D(728, (1,1), strides=2, padding='same')(x)
+        residual = layers.BatchNormalization()(residual)
+        x = layers.Activation('relu')(x)
+        x = layers.SeparableConv2D(728, (3,3), padding='same')(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = layers.SeparableConv2D(728, (3,3), padding='same')(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.MaxPooling2D((3, 3), strides=2, padding='same')(x)
+        x = layers.add([x, residual])
+
+        # middle flow
+        for i in range(8):
+            residual = x
+            x = layers.Activation('relu')(x)
+            x = layers.SeparableConv2D(728, (3,3), padding='same')(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.Activation('relu')(x)
+            x = layers.SeparableConv2D(728, (3,3), padding='same')(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.Activation('relu')(x)
+            x = layers.SeparableConv2D(728, (3,3), padding='same')(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.add([x, residual])
+        
+        # exit flow
+        residual = layers.Convolution2D(1024, (1,1), strides=2, padding='same')(x)
+        residual = layers.BatchNormalization()(residual)
+        x = layers.Activation('relu')(x)
+        x = layers.SeparableConv2D(728, (3,3), padding='same')(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = layers.SeparableConv2D(1024, (3,3), padding='same')(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.MaxPooling2D((3, 3), strides=2, padding='same')(x)
+        x = layers.add([x, residual])
+        x = layers.SeparableConv2D(1536, (3,3), padding='same')(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = layers.SeparableConv2D(2048, (3,3), padding='same')(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = layers.GlobalAveragePooling2D()(x)
+        x = layers.Dense(1, kernel_initializer='he_normal', activation='sigmoid')(x)
+
+        model = models.Model(inputs=inputs, outputs=x)
+
+        model.compile(
+            loss='binary_crossentropy',
+            optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
+            metrics=getMetrics("all")
+        )
+    return model
+
 ### CNN EfficientNetV2 ###
 def loadEfficientNetV2(input_shape=(480,640,3),gpu_count=2):
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
         model = models.Sequential(name="EfficientNetV2")
         model.add(layers.InputLayer(input_shape=input_shape))
-        model.add(efficientnetv2.effnetv2_model.get_model('efficientnetv2-b0', include_top=False))
+        # model.add(efficientnetv2.effnetv2_model.get_model('efficientnetv2-b0', include_top=False))
+        model.add(efficientnetv2.effnetv2_model.get_model('efficientnetv2-b3', include_top=False))
         model.add(layers.Dropout(rate=0.2))
         model.add(layers.Dense(1, activation='sigmoid'))
         model.compile(
@@ -240,6 +347,150 @@ def loadEfficientNetV2(input_shape=(480,640,3),gpu_count=2):
             metrics=getMetrics("all")
         )
     return model
+
+
+
+### オリジナル構造 ###
+def original_net(inputs,output_filter=128):
+    cell_num = 8
+    x = inputs
+    cell1 = layers.Conv2D(output_filter//cell_num,1,padding="same")(x)
+    cell2 = layers.MaxPool2D(pool_size=(2,2),strides=1,padding="same")(x)
+    cell2 = layers.Conv2D(output_filter//cell_num,1,padding="same")(cell2)
+    cell3 = layers.Conv2D(output_filter//cell_num,1,padding="same")(x)
+    cell3 = layers.Conv2D(output_filter//cell_num,3,padding="same")(cell3)
+    cell4 = layers.Conv2D(output_filter//cell_num,1,padding="same")(x)
+    cell4 = layers.Conv2D(output_filter//cell_num,3,padding="same")(cell4)
+    cell4 = layers.Conv2D(output_filter//cell_num,5,padding="same")(cell4)
+    # cell5 = layers.Conv2D(output_filter//cell_num,1,padding="same")(x)
+    # cell5 = layers.Concatenate()([x,cell5])
+    # cell5_cp = cell5
+    # cell5 = layers.Conv2D(output_filter//cell_num,3,padding="same")(cell5)
+    # cell5 = layers.Concatenate()([cell5_cp,cell5])
+    # cell5_cp = cell5
+    # cell5 = layers.Conv2D(output_filter//cell_num,5,padding="same")(cell5)
+    # cell5 = layers.Concatenate()([cell5_cp,cell5])
+    cell5 = layers.Activation('relu')(x)
+    cell5 = layers.SeparableConv2D(output_filter//cell_num, (3,3), padding='same')(cell5)
+    cell6 = layers.Activation('relu')(x)
+    cell6 = layers.SeparableConv2D(output_filter//cell_num, (3,3), padding='same')(cell6)
+    cell7 = layers.Activation('relu')(x)
+    cell7 = layers.SeparableConv2D(output_filter//cell_num, (3,3), padding='same')(cell7)
+    cell8 = layers.Activation('relu')(x)
+    cell8 = layers.SeparableConv2D(output_filter//cell_num, (3,3), padding='same')(cell8)
+    # cell6 = layers.BatchNormalization()(cell6)
+    x = layers.Concatenate()([cell1,cell2,cell3,cell4,cell5,cell6,cell7,cell8])
+
+    cp = layers.Conv2D(output_filter//2, (1,1), strides=2, padding="same")(x)
+    x = layers.SeparableConv2D(output_filter//2, (3,3), strides=2, padding='same')(x)
+    x = layers.Concatenate()([x,cp])
+    x = layers.BatchNormalization()(x)
+    return x
+
+def original_net2(inputs,output_filter=128):
+    cell_num = 8
+    x = inputs
+    cell1 = layers.Conv2D(output_filter//cell_num,1,padding="same")(x)
+    cell2 = layers.MaxPool2D(pool_size=(2,2),strides=1,padding="same")(x)
+    cell2 = layers.Conv2D(output_filter//cell_num,1,padding="same")(cell2)
+    cell3 = layers.Conv2D(output_filter//cell_num,1,padding="same")(x)
+    cell3 = layers.Conv2D(output_filter//cell_num,3,padding="same")(cell3)
+    cell4 = layers.Conv2D(output_filter//cell_num,1,padding="same")(x)
+    cell4 = layers.Conv2D(output_filter//cell_num,3,padding="same")(cell4)
+    cell4 = layers.Conv2D(output_filter//cell_num,5,padding="same")(cell4)
+    cell5 = layers.Conv2D(output_filter//cell_num,1,padding="same")(x)
+    cell5 = layers.Conv2D(output_filter//cell_num,3,padding="same")(cell5)
+    cell5 = layers.Conv2D(output_filter//cell_num,5,padding="same")(cell5)
+    cell5 = layers.Conv2D(output_filter//cell_num,7,padding="same")(cell5)
+    cell6 = layers.Conv2D(output_filter//cell_num,1,padding="same")(x)
+    cell6 = layers.Conv2D(output_filter//cell_num,3,padding="same")(cell6)
+    cell6 = layers.Conv2D(output_filter//cell_num,5,padding="same")(cell6)
+    cell6 = layers.Conv2D(output_filter//cell_num,7,padding="same")(cell6)
+    cell6 = layers.Conv2D(output_filter//cell_num,9,padding="same")(cell6)
+    cell7 = layers.Conv2D(output_filter//cell_num,1,padding="same")(x)
+    cell7 = layers.Conv2D(output_filter//cell_num,3,padding="same")(cell7)
+    cell7 = layers.Conv2D(output_filter//cell_num,5,padding="same")(cell7)
+    cell7 = layers.Conv2D(output_filter//cell_num,7,padding="same")(cell7)
+    cell7 = layers.Conv2D(output_filter//cell_num,9,padding="same")(cell7)
+    cell7 = layers.Conv2D(output_filter//cell_num,11,padding="same")(cell7)
+    cell8 = layers.Conv2D(output_filter//cell_num,1,padding="same")(x)
+    cell8 = layers.Conv2D(output_filter//cell_num,3,padding="same")(cell8)
+    cell8 = layers.Conv2D(output_filter//cell_num,5,padding="same")(cell8)
+    cell8 = layers.Conv2D(output_filter//cell_num,7,padding="same")(cell8)
+    cell8 = layers.Conv2D(output_filter//cell_num,9,padding="same")(cell8)
+    cell8 = layers.Conv2D(output_filter//cell_num,11,padding="same")(cell8)
+    cell8 = layers.Conv2D(output_filter//cell_num,13,padding="same")(cell8)
+    x = layers.Concatenate()([cell1,cell2,cell3,cell4,cell5,cell6,cell7,cell8])
+
+    x = layers.SeparableConv2D(output_filter, (3,3), strides=2, padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('relu')(x)
+    return x
+
+def loadOriginalNet(input_shape=(480,640,3),gpu_count=2):
+    strategy = tf.distribute.MirroredStrategy()
+    with strategy.scope():
+        inputs = keras.Input(shape=input_shape)
+        x = inputs
+
+        # x = original_net2(x,64)
+        # x = original_net2(x,128)
+        # x = original_net2(x,256)
+        # x = original_net2(x,512)
+        # x = original_net2(x,1024)
+
+        x = original_net2(x,64)
+        x = original_net(x,128)
+        x = original_net2(x,256)
+        x = original_net2(x,728)
+        for i in range(8):
+            residual = x
+            x = layers.Activation('relu')(x)
+            x = layers.SeparableConv2D(728, (3,3), padding='same')(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.Activation('relu')(x)
+            x = layers.SeparableConv2D(728, (3,3), padding='same')(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.Activation('relu')(x)
+            x = layers.SeparableConv2D(728, (3,3), padding='same')(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.add([x, residual])
+
+        # residual = layers.Convolution2D(1024, (1,1), strides=2, padding='same')(x)
+        # residual = layers.BatchNormalization()(residual)
+        # x = layers.Activation('relu')(x)
+        # x = layers.SeparableConv2D(728, (3,3), padding='same')(x)
+        # x = layers.BatchNormalization()(x)
+        # x = layers.Activation('relu')(x)
+        # x = layers.SeparableConv2D(1024, (3,3), padding='same')(x)
+        # x = layers.BatchNormalization()(x)
+        # x = layers.MaxPooling2D((3, 3), strides=2, padding='same')(x)
+        # x = layers.add([x, residual])
+        # x = layers.SeparableConv2D(1536, (3,3), padding='same')(x)
+        # x = layers.BatchNormalization()(x)
+        # x = layers.Activation('relu')(x)
+        # x = layers.SeparableConv2D(2048, (3,3), padding='same')(x)
+        # x = layers.BatchNormalization()(x)
+        # x = layers.Activation('relu')(x)
+        # x = layers.GlobalAveragePooling2D()(x)
+
+        # x = layers.Flatten()(x)
+        x = layers.Dense(1, kernel_initializer='he_normal', activation='sigmoid')(x)
+
+        model = models.Model(inputs=inputs, outputs=x, name="OriginalNet")
+        model.compile(
+            loss='binary_crossentropy',
+            optimizer=optimizers.SGD(lr=1e-4, momentum=0.9),
+            metrics=getMetrics("all")
+        )
+    return model
+
+
+
+
+
+
+
 
 
 ### CNN AutoEncoder ###
@@ -313,7 +564,7 @@ def loadSampleRnn(input_shape=(5,256,256,3),gpu_count=2):
         # x0 = layers.Dense(2048, activation='relu')(x0)
         x0 = layers.Dense(512, activation='relu')(x0)
         x0 = layers.Dense(128, activation='relu')(x0)
-        output = layers.Dense(1, activation='relu')(x0)
+        output = layers.Dense(1, activation='sigmoid')(x0)
         # output = layers.Activation('tanh')(x0)
         model = models.Model(inputs=inputs, outputs=output)
         model.compile(
