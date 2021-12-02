@@ -28,8 +28,8 @@ def save_all_frames(video_path, dir_path, basename, step=1, ext='jpg'):
 if __name__=='__main__':
     video_directory = "/data/toshikawa/Celeb-DF-v2/Celeb-synthesis/*"
     image_directory = "/data/toshikawa/datas/Celeb-synthesis-image"
-    # video_directory = "/data/toshikawa/Celeb-DF-v2/Celeb-real/*"
-    # image_directory = "/data/toshikawa/datas/Celeb-real-image"
+    video_directory = "/data/toshikawa/Celeb-DF-v2/Celeb-real/*"
+    image_directory = "/data/toshikawa/datas/Celeb-real-image"
     # video_directory = "/data/toshikawa/DFMNIST+/fake_dataset/*/*.mp4"
     # image_directory = "/data/toshikawa/datas/DFMNIST-fake-image"
     # video_directory = "/data/toshikawa/DFMNIST+/real_dataset/*/*.mp4"

@@ -3,8 +3,8 @@
 ####################################################################################################
 
 # GPU無効化
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = '-1'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = '-1'
 
 
 
@@ -13,13 +13,15 @@ from common_import import *
 
 
 
+# model_structure = "InceptionV3"
+# model_structure = "Xception"
 # model_structure = "EfficientNetV2"
-# model_structure = "OriginalNet"
-# gpu_count = 2
-# image_size = (256, 256, 3)
+model_structure = "OriginalNet"
+gpu_count = 2
+image_size = (256, 256, 3)
 
-# model = globals()['load'+model_structure](input_shape=image_size,gpu_count=gpu_count)
-# model.summary()
+model = globals()['load'+model_structure](input_shape=image_size,gpu_count=gpu_count)
+model.summary()
 
 
 

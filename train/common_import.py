@@ -1,6 +1,6 @@
 # GPU無効化
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = '-1'
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = '-1'
 
 import tensorflow.python.keras as keras
 from tensorflow.python.keras import layers
@@ -29,8 +29,9 @@ import re
 import time
 import os
 import random
+import copy
 from random import shuffle
-from itertools import islice
+from itertools import islice,chain
 from pprint import pprint
 
 from tensorflow.python.util.nest import _yield_value
@@ -212,7 +213,7 @@ def loadVgg16(input_shape=(480,640,3),gpu_count=2):
     return model
 
 ### CNN Inception ###
-def loadInception(input_shape=(480,640,3),gpu_count=2):
+def loadInceptionV3(input_shape=(480,640,3),gpu_count=2):
     strategy = tf.distribute.MirroredStrategy()
     with strategy.scope():
         model = models.Sequential(name="Xception")
@@ -354,37 +355,64 @@ def loadEfficientNetV2(input_shape=(480,640,3),gpu_count=2):
 def original_net(inputs,output_filter=128):
     cell_num = 8
     x = inputs
-    cell1 = layers.Conv2D(output_filter//cell_num,1,padding="same")(x)
-    cell2 = layers.MaxPool2D(pool_size=(2,2),strides=1,padding="same")(x)
-    cell2 = layers.Conv2D(output_filter//cell_num,1,padding="same")(cell2)
-    cell3 = layers.Conv2D(output_filter//cell_num,1,padding="same")(x)
-    cell3 = layers.Conv2D(output_filter//cell_num,3,padding="same")(cell3)
-    cell4 = layers.Conv2D(output_filter//cell_num,1,padding="same")(x)
-    cell4 = layers.Conv2D(output_filter//cell_num,3,padding="same")(cell4)
-    cell4 = layers.Conv2D(output_filter//cell_num,5,padding="same")(cell4)
-    # cell5 = layers.Conv2D(output_filter//cell_num,1,padding="same")(x)
-    # cell5 = layers.Concatenate()([x,cell5])
-    # cell5_cp = cell5
-    # cell5 = layers.Conv2D(output_filter//cell_num,3,padding="same")(cell5)
-    # cell5 = layers.Concatenate()([cell5_cp,cell5])
-    # cell5_cp = cell5
-    # cell5 = layers.Conv2D(output_filter//cell_num,5,padding="same")(cell5)
-    # cell5 = layers.Concatenate()([cell5_cp,cell5])
-    cell5 = layers.Activation('relu')(x)
-    cell5 = layers.SeparableConv2D(output_filter//cell_num, (3,3), padding='same')(cell5)
-    cell6 = layers.Activation('relu')(x)
-    cell6 = layers.SeparableConv2D(output_filter//cell_num, (3,3), padding='same')(cell6)
-    cell7 = layers.Activation('relu')(x)
-    cell7 = layers.SeparableConv2D(output_filter//cell_num, (3,3), padding='same')(cell7)
-    cell8 = layers.Activation('relu')(x)
-    cell8 = layers.SeparableConv2D(output_filter//cell_num, (3,3), padding='same')(cell8)
-    # cell6 = layers.BatchNormalization()(cell6)
+
+    # cell1 = layers.Conv2D(output_filter//cell_num,(1,1),padding="same")(x)
+    # cell2 = layers.AveragePooling2D(pool_size=(2,2),strides=1,padding="same")(x)
+    # cell2 = layers.Conv2D(output_filter//cell_num,(3,3),padding="same")(cell2)
+    # cell3 = layers.Conv2D(output_filter//cell_num,(1,1),padding="same")(x)
+    # cell3 = layers.Conv2D(output_filter//cell_num,(3,3),padding="same")(cell3)
+    # cell4 = layers.Conv2D(output_filter//cell_num,(1,1),padding="same")(x)
+    # cell4 = layers.Conv2D(output_filter//cell_num,(3,3),padding="same")(cell4)
+    # cell4 = layers.Conv2D(output_filter//cell_num,(5,5),padding="same")(cell4)
+    # cell5_residual = layers.Conv2D(output_filter//2//cell_num,(1,1),padding="same")(x)
+    # cell5 = layers.Conv2D(output_filter//2//cell_num,(1,1),padding="same")(x)
+    # cell5 = layers.Concatenate()([cell5_residual,cell5])
+    # cell5_residual = layers.Conv2D(output_filter//2//cell_num,(1,1),padding="same")(cell5)
+    # cell5 = layers.Conv2D(output_filter//2//cell_num,(3,3),padding="same")(cell5)
+    # cell5 = layers.Concatenate()([cell5_residual,cell5])
+    # cell5_residual = layers.Conv2D(output_filter//2//cell_num,(1,1),padding="same")(cell5)
+    # cell5 = layers.Conv2D(output_filter//2//cell_num,(5,5),padding="same")(cell5)
+    # cell5 = layers.Concatenate()([cell5_residual,cell5])
+    # cell6 = layers.Activation('relu')(x)
+    # cell6 = layers.SeparableConv2D(output_filter//cell_num, (3,3), padding='same')(cell6)
+    # cell7 = layers.Activation('relu')(x)
+    # cell7 = layers.SeparableConv2D(output_filter//cell_num, (3,3), padding='same')(cell7)
+    # cell8 = layers.Activation('relu')(x)
+    # cell8 = layers.SeparableConv2D(output_filter//cell_num, (3,3), padding='same')(cell8)
+    # x = layers.Concatenate()([cell1,cell2,cell3,cell4,cell5,cell6,cell7,cell8])
+
+    cell1 = layers.Conv2D(output_filter//cell_num,(1,1),padding="same")(x)
+    cell2 = layers.AveragePooling2D(pool_size=(2,2),strides=1,padding="same")(x)
+    cell2 = layers.Conv2D(output_filter//cell_num,(3,3),padding="same")(cell2)
+    cell3 = layers.Conv2D(output_filter//cell_num,(1,1),padding="same")(x)
+    cell3 = layers.Conv2D(output_filter//cell_num,(3,3),padding="same")(cell3)
+    cell4 = layers.Conv2D(output_filter//cell_num,(1,1),padding="same")(x)
+    cell4 = layers.DepthwiseConv2D((3,3),padding="same")(cell4)
+    cell5 = layers.SeparableConv2D(output_filter//cell_num,(1,1),padding="same")(x)
+    cell5 = layers.SeparableConv2D(output_filter//cell_num,(3,3),padding="same")(cell5)
+    cell6 = layers.Conv2D(output_filter//cell_num,(1,1),padding="same")(x)
+    cell6 = layers.Conv2D(output_filter//cell_num,(3,3),padding="same")(cell6)
+    cell6 = layers.Conv2D(output_filter//cell_num,(5,5),padding="same")(cell6)
+    cell7 = layers.Conv2D(output_filter//cell_num,(1,1),padding="same")(x)
+    cell7 = layers.DepthwiseConv2D((3,3),padding="same")(cell7)
+    cell7 = layers.DepthwiseConv2D((5,5),padding="same")(cell7)
+    cell8_residual = layers.SeparableConv2D(output_filter//2//cell_num,(1,1),padding="same")(x)
+    cell8 = layers.SeparableConv2D(output_filter//2//cell_num,(1,1),padding="same")(x)
+    cell8 = layers.Concatenate()([cell8_residual,cell8])
+    cell8_residual = layers.SeparableConv2D(output_filter//2//cell_num,(1,1),padding="same")(cell8)
+    cell8 = layers.SeparableConv2D(output_filter//2//cell_num,(3,3),padding="same")(cell8)
+    cell8 = layers.Concatenate()([cell8_residual,cell8])
+    cell8_residual = layers.SeparableConv2D(output_filter//2//cell_num,(1,1),padding="same")(cell8)
+    cell8 = layers.SeparableConv2D(output_filter//2//cell_num,(5,5),padding="same")(cell8)
+    cell8 = layers.Concatenate()([cell8_residual,cell8])
     x = layers.Concatenate()([cell1,cell2,cell3,cell4,cell5,cell6,cell7,cell8])
 
-    cp = layers.Conv2D(output_filter//2, (1,1), strides=2, padding="same")(x)
-    x = layers.SeparableConv2D(output_filter//2, (3,3), strides=2, padding='same')(x)
-    x = layers.Concatenate()([x,cp])
-    x = layers.BatchNormalization()(x)
+    # x = layers.DepthwiseConv2D((3,3), strides=2, padding='same')(x)
+
+    # cp = layers.Conv2D(output_filter//2, (1,1), strides=2, padding="same")(x)
+    # x = layers.SeparableConv2D(output_filter//2, (3,3), strides=2, padding='same')(x)
+    # x = layers.Concatenate()([x,cp])
+    # x = layers.BatchNormalization()(x)
     return x
 
 def original_net2(inputs,output_filter=128):
@@ -439,42 +467,175 @@ def loadOriginalNet(input_shape=(480,640,3),gpu_count=2):
         # x = original_net2(x,512)
         # x = original_net2(x,1024)
 
-        x = original_net2(x,64)
+
+        x = layers.SeparableConv2D(32, (3,3), padding="same")(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+
+        residual = layers.SeparableConv2D(64, (1,1), strides=2, padding="same")(x)
+        residual = layers.BatchNormalization()(residual)
+        x = original_net(x,64)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = original_net(x,64)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = original_net(x,64)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = layers.SeparableConv2D(64, (3,3), strides=2, padding="same")(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.add([x,residual])
+        x = layers.Activation('relu')(x)
+
+        # for i in range(4):
+        #     residual = x
+        #     x = layers.Activation('relu')(x)
+        #     x = layers.SeparableConv2D(64, (3,3), padding='same')(x)
+        #     x = layers.BatchNormalization()(x)
+        #     x = layers.Activation('relu')(x)
+        #     x = layers.SeparableConv2D(64, (3,3), padding='same')(x)
+        #     x = layers.BatchNormalization()(x)
+        #     x = layers.Activation('relu')(x)
+        #     x = layers.SeparableConv2D(64, (3,3), padding='same')(x)
+        #     x = layers.BatchNormalization()(x)
+        #     x = layers.add([x, residual])
+        # x = layers.Activation('relu')(x)
+
+        residual = layers.SeparableConv2D(128, (1,1), strides=2, padding="same")(x)
+        residual = layers.BatchNormalization()(residual)
         x = original_net(x,128)
-        x = original_net2(x,256)
-        x = original_net2(x,728)
-        for i in range(8):
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = original_net(x,128)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = original_net(x,128)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = layers.SeparableConv2D(128, (3,3), strides=2, padding="same")(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.add([x,residual])
+        x = layers.Activation('relu')(x)
+
+        for i in range(4):
             residual = x
             x = layers.Activation('relu')(x)
-            x = layers.SeparableConv2D(728, (3,3), padding='same')(x)
+            x = layers.SeparableConv2D(128, (3,3), padding='same')(x)
             x = layers.BatchNormalization()(x)
             x = layers.Activation('relu')(x)
-            x = layers.SeparableConv2D(728, (3,3), padding='same')(x)
+            x = layers.SeparableConv2D(128, (3,3), padding='same')(x)
             x = layers.BatchNormalization()(x)
             x = layers.Activation('relu')(x)
-            x = layers.SeparableConv2D(728, (3,3), padding='same')(x)
+            x = layers.SeparableConv2D(128, (3,3), padding='same')(x)
             x = layers.BatchNormalization()(x)
             x = layers.add([x, residual])
+        x = layers.Activation('relu')(x)
 
-        # residual = layers.Convolution2D(1024, (1,1), strides=2, padding='same')(x)
+        residual = layers.SeparableConv2D(256, (1,1), strides=2, padding="same")(x)
+        residual = layers.BatchNormalization()(residual)
+        x = original_net(x,256)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = original_net(x,256)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = original_net(x,256)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = layers.SeparableConv2D(256, (3,3), strides=2, padding="same")(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.add([x,residual])
+        # (32,32,256)
+
+        for i in range(4):
+            residual = x
+            x = layers.Activation('relu')(x)
+            x = layers.SeparableConv2D(256, (3,3), padding='same')(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.Activation('relu')(x)
+            x = layers.SeparableConv2D(256, (3,3), padding='same')(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.Activation('relu')(x)
+            x = layers.SeparableConv2D(256, (3,3), padding='same')(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.add([x, residual])
+        x = layers.Activation('relu')(x)
+        # (32,32,256)
+
+        residual = layers.SeparableConv2D(512, (1,1), strides=2, padding="same")(x)
+        residual = layers.BatchNormalization()(residual)
+        x = original_net(x,512)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = original_net(x,512)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = original_net(x,512)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = layers.SeparableConv2D(512, (3,3), strides=2, padding="same")(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.add([x,residual])
+        x = layers.Activation('relu')(x)
+
+        residual = layers.SeparableConv2D(768, (1,1), strides=2, padding="same")(x)
+        residual = layers.BatchNormalization()(residual)
+        x = original_net(x,768)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = original_net(x,768)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = original_net(x,768)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = layers.SeparableConv2D(768, (3,3), strides=2, padding="same")(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.add([x,residual])
+        # (8,8,768)
+
+        for i in range(4):
+            residual = x
+            x = layers.Activation('relu')(x)
+            x = layers.SeparableConv2D(768, (3,3), padding='same')(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.Activation('relu')(x)
+            x = layers.SeparableConv2D(768, (3,3), padding='same')(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.Activation('relu')(x)
+            x = layers.SeparableConv2D(768, (3,3), padding='same')(x)
+            x = layers.BatchNormalization()(x)
+            x = layers.add([x, residual])
+        x = layers.Activation('relu')(x)
+        # (8,8,768)
+
+        # residual = layers.SeparableConv2D(768, (1,1), strides=2, padding="same")(x)
         # residual = layers.BatchNormalization()(residual)
-        # x = layers.Activation('relu')(x)
-        # x = layers.SeparableConv2D(728, (3,3), padding='same')(x)
+        # x = original_net(x,768)
         # x = layers.BatchNormalization()(x)
         # x = layers.Activation('relu')(x)
-        # x = layers.SeparableConv2D(1024, (3,3), padding='same')(x)
-        # x = layers.BatchNormalization()(x)
-        # x = layers.MaxPooling2D((3, 3), strides=2, padding='same')(x)
-        # x = layers.add([x, residual])
-        # x = layers.SeparableConv2D(1536, (3,3), padding='same')(x)
+        # x = original_net(x,768)
         # x = layers.BatchNormalization()(x)
         # x = layers.Activation('relu')(x)
-        # x = layers.SeparableConv2D(2048, (3,3), padding='same')(x)
+        # x = original_net(x,768)
         # x = layers.BatchNormalization()(x)
         # x = layers.Activation('relu')(x)
-        # x = layers.GlobalAveragePooling2D()(x)
+        # x = layers.SeparableConv2D(768, (3,3), strides=2, padding="same")(x)
+        # x = layers.BatchNormalization()(x)
+        # x = layers.add([x,residual])
+        # x = layers.Activation('relu')(x)
 
-        # x = layers.Flatten()(x)
+        x = layers.SeparableConv2D(1024, (3,3), strides=2, padding="same")(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+        x = layers.SeparableConv2D(2048, (3,3), strides=2, padding="same")(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.Activation('relu')(x)
+
+
+
+        x = layers.Flatten()(x)
         x = layers.Dense(1, kernel_initializer='he_normal', activation='sigmoid')(x)
 
         model = models.Model(inputs=inputs, outputs=x, name="OriginalNet")

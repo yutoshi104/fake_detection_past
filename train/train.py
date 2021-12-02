@@ -18,14 +18,15 @@ from common_import import *
 # model_structure = "SampleCnn"
 # model_structure = "Vgg16"
 # model_structure = "Inception"
-# model_structure = "Xception"
+model_structure = "Xception"
 # model_structure = "EfficientNetV2"
-model_structure = "OriginalNet"
-epochs = 50
+# model_structure = "OriginalNet"
+epochs = 5
 gpu_count = 2
-batch_size = 64 * gpu_count
+batch_size = 32 * gpu_count
 validation_rate = 0.1
 test_rate = 0.1
+# ↑動画ごとに分けているので最終的な画像でのデータ数はだいたい...
 cp_period = 10
 data_dir = '/data/toshikawa/datas'
 # classes = ['yuto', 'b']
@@ -60,29 +61,50 @@ class_file_num = {}
 class_weights = {}
 data = []
 data_num = 0
-for i,c in enumerate(classes):
-    paths = sorted(glob.glob(data_dir+"/"+c+"/*"))
-    path_num = len(paths)
+
+
+for l,c in enumerate(classes):
+    image_path_list = sorted(glob.glob(data_dir+"/"+c+"/*"))
+    path_num = len(image_path_list)
     data_num += path_num
-    labels = [i]*path_num
-    # データ分割
-    data += zip(paths,labels)
+    regexp = r'^.+?id(?P<id>(\d+))(_id(?P<id2>\d+))?_(?P<key>\d+)_(?P<num>\d+).(?P<ext>.{2,4})$'
+    past_path = image_path_list[0]
+    movie_image_list = []
+    for i in range(1,len(image_path_list)):
+        past_ids = re.search(regexp,past_path).groupdict()
+        now_ids = re.search(regexp,image_path_list[i]).groupdict()
+        if (past_ids['id']==now_ids['id']) and (past_ids['id2']==None or past_ids['id2']==now_ids['id2']) and (past_ids['key']==now_ids['key']):
+            movie_image_list.append([image_path_list[i],l])
+        else:
+            data.append(movie_image_list)
+            movie_image_list = []
+            movie_image_list.append([image_path_list[i],l])
+        past_path = image_path_list[i]
+    # print(len(data))
     # 不均衡データ調整
     class_file_num[c] = path_num
-    if i==0:
+    if l==0:
         n = class_file_num[c]
-    class_weights[i] = 1 / (class_file_num[c]/n)
-del paths
-del labels
+    class_weights[l] = 1 / (class_file_num[c]/n)
+print("\tMOVIE NUM: " + str(len(data)))
 random.shuffle(data)
 train_rate = 1 - validation_rate - test_rate
-train_data = data[ : (int)(data_num*train_rate)]
-validation_data = data[(int)(data_num*train_rate) : (int)(data_num*(train_rate+validation_rate))]
-test_data = data[(int)(data_num*(train_rate+validation_rate)) : ]
-train_data_num = (int)(data_num*train_rate)
-validation_data_num = (int)(data_num*validation_rate)
-test_data_num = (int)(data_num*test_rate)
+s1 = (int)(len(data)*train_rate)
+s2 = (int)(len(data)*(train_rate+validation_rate))
+train_data = data[ : s1]
+validation_data = data[s1 : s2]
+test_data = data[s2 : ]
 del data
+train_data = list(chain.from_iterable(train_data))
+validation_data = list(chain.from_iterable(validation_data))
+test_data = list(chain.from_iterable(test_data))
+train_data_num = len(train_data)
+validation_data_num = len(validation_data)
+test_data_num = len(test_data)
+print("\tALL IMAGE DATA NUM: " + str(data_num))
+print("\tTRAIN IMAGE DATA NUM: " + str(train_data_num))
+print("\tVALIDATION IMAGE DATA NUM: " + str(validation_data_num))
+print("\tTEST IMAGE DATA NUM: " + str(test_data_num))
 def makeGenerator(data):
     return ImageIterator(
         data,
@@ -105,6 +127,9 @@ def makeGenerator(data):
 train_generator = makeGenerator(train_data)
 validation_generator = makeGenerator(validation_data)
 test_generator = makeGenerator(test_data)
+del train_data
+del validation_data
+del test_data
 
 
 ###ディレクトリ作成###

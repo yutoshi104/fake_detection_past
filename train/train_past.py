@@ -15,21 +15,24 @@ from common_import import *
 
 
 ###パラメータ###
-model_structure = "SampleCnn"
+# model_structure = "SampleCnn"
 # model_structure = "Vgg16"
+# model_structure = "Inception"
 # model_structure = "Xception"
 # model_structure = "EfficientNetV2"
-epochs = 1
+model_structure = "OriginalNet"
+epochs = 50
 gpu_count = 2
-batch_size = 32 * gpu_count
+batch_size = 64 * gpu_count
 validation_rate = 0.1
 test_rate = 0.1
 cp_period = 10
 data_dir = '/data/toshikawa/datas'
 # classes = ['yuto', 'b']
-# classes = ['Celeb-real-image', 'Celeb-synthesis-image-learning-2']
-classes = ['Celeb-real-image-face', 'Celeb-synthesis-image-learning-2-face']
+# classes = ['Celeb-real-image', 'Celeb-synthesis-image']
+classes = ['Celeb-real-image-face', 'Celeb-synthesis-image-face']
 # image_size = (480, 640, 3)
+# image_size = (240, 320, 3)
 image_size = (256, 256, 3)
 # image_size = (32, 32, 3)
 es_flg = False
@@ -39,20 +42,12 @@ es_flg = False
 rotation_range=15.0#0.0
 width_shift_range=0.15#0.0
 height_shift_range=0.15#0.0
+brightness_range = None#None
 shear_range=0.0#0.0
 zoom_range=0.1#0.0
+channel_shift_range = 0.0#0.0
 horizontal_flip=True#False
 vertical_flip=False#False
-
-
-###不均衡データ調整###
-class_file_num = {}
-class_weights = {}
-for i,c in enumerate(classes):
-    class_file_num[c] = sum(os.path.isfile(os.path.join(data_dir+"/"+c,name)) for name in os.listdir(data_dir+"/"+c))
-    if i==0:
-        n = class_file_num[c]
-    class_weights[i] = 1 / (class_file_num[c]/n)
 
 
 ###モデルの生成###
@@ -61,48 +56,55 @@ model.summary()
 
 
 ###Generator作成###
-file_num = sum(os.path.isfile(os.path.join(data_dir, name)) for name in os.listdir(data_dir))
-datagen = ImageDataGenerator(
-    rescale=1./255,
-    data_format='channels_last',
-    validation_split=validation_rate+test_rate,
-    rotation_range=rotation_range,
-    width_shift_range=width_shift_range,
-    height_shift_range=height_shift_range,
-    shear_range=shear_range,
-    zoom_range=zoom_range,
-    horizontal_flip=horizontal_flip,
-    vertical_flip=vertical_flip
-)
-train_generator = datagen.flow_from_directory(
-    data_dir,
-    target_size=image_size[:2],
-    batch_size=batch_size,
-    class_mode='binary',
-    shuffle=True,
-    seed=1,
-    color_mode="rgb",
-    classes=classes,
-    subset = "training" 
-)
-vt_generator = datagen.flow_from_directory(
-    data_dir,
-    target_size=image_size[:2],
-    batch_size=batch_size,
-    class_mode='binary',
-    shuffle=True,
-    seed=1,
-    color_mode="rgb",
-    classes=classes,
-    subset = "validation"
-)
-vt_length = vt_generator.__len__()
-test_generator = islice(vt_generator,0,(int)(vt_length*test_rate/(validation_rate+test_rate)))
-validation_generator = islice(vt_generator,(int)(vt_length*test_rate/(validation_rate+test_rate)))
-# print(type(train_generator))        #<class 'tensorflow.python.keras.preprocessing.image.DirectoryIterator'>
-# print(type(validation_generator))   #<class 'itertools.islice'>
-# print(type(test_generator))         #<class 'itertools.islice'>
-# exit()
+class_file_num = {}
+class_weights = {}
+data = []
+data_num = 0
+for i,c in enumerate(classes):
+    paths = sorted(glob.glob(data_dir+"/"+c+"/*"))
+    path_num = len(paths)
+    data_num += path_num
+    labels = [i]*path_num
+    # データ分割
+    data += zip(paths,labels)
+    # 不均衡データ調整
+    class_file_num[c] = path_num
+    if i==0:
+        n = class_file_num[c]
+    class_weights[i] = 1 / (class_file_num[c]/n)
+del paths
+del labels
+random.shuffle(data)
+train_rate = 1 - validation_rate - test_rate
+train_data = data[ : (int)(data_num*train_rate)]
+validation_data = data[(int)(data_num*train_rate) : (int)(data_num*(train_rate+validation_rate))]
+test_data = data[(int)(data_num*(train_rate+validation_rate)) : ]
+train_data_num = (int)(data_num*train_rate)
+validation_data_num = (int)(data_num*validation_rate)
+test_data_num = (int)(data_num*test_rate)
+del data
+def makeGenerator(data):
+    return ImageIterator(
+        data,
+        batch_size=batch_size,
+        target_size=image_size[:2],
+        color_mode='rgb',
+        seed=1,
+        rotation_range=rotation_range,
+        width_shift_range=width_shift_range,
+        height_shift_range=height_shift_range,
+        brightness_range=brightness_range,
+        shear_range=shear_range,
+        zoom_range=zoom_range,
+        channel_shift_range=channel_shift_range,
+        horizontal_flip=horizontal_flip,
+        vertical_flip=vertical_flip,
+        rescale=1./255,
+        data_format='channels_last',
+        subset='train')
+train_generator = makeGenerator(train_data)
+validation_generator = makeGenerator(validation_data)
+test_generator = makeGenerator(test_data)
 
 
 ###ディレクトリ作成###
@@ -146,6 +148,9 @@ print("\tGPU COUNT: " + str(gpu_count))
 print("\tBATCH SIZE: " + str(batch_size))
 print("\tVALIDATION RATE: " + str(validation_rate))
 print("\tTEST RATE: " + str(test_rate))
+print("\tTRAIN DATA NUM: " + str(train_data_num))
+print("\tVALIDATION DATA NUM: " + str(validation_data_num))
+print("\tTEST DATA NUM: " + str(test_data_num))
 print("\tCHECKPOINT PERIOD: " + str(cp_period))
 print("\tDATA DIRECTORY: " + str(data_dir))
 print("\tCLASSES: " + str(classes))
@@ -155,8 +160,10 @@ print("\tEARLY STOPPING: " + str(es_flg))
 print("\tROTATION RANGE: " + str(rotation_range))
 print("\tWIDTH SHIFT RANGE: " + str(width_shift_range))
 print("\tHEIGHT SHIFT RANGE: " + str(height_shift_range))
+print("\tBRIGHTNESS RANGE: " + str(brightness_range))
 print("\tSHEAR RANGE: " + str(shear_range))
 print("\tZOOM RANGE: " + str(zoom_range))
+print("\tCHANNEL SHIFT RANGE: " + str(channel_shift_range))
 print("\tHORIZONTAL FLIP: " + str(horizontal_flip))
 print("\tVERTICAL FLIP: " + str(vertical_flip))
 print("")
@@ -213,6 +220,7 @@ def test_and_save(a=None,b=None):
 
 
 ###学習###
+print("学習中...")
 signal.signal(signal.SIGINT, test_and_save)
 history = model.fit_generator(
     train_generator,
